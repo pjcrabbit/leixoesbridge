@@ -5,6 +5,8 @@ from datetime import datetime, timezone
 import os
 from shapely.geometry import Point
 from shapely.geometry import shape
+import platform
+
 
 API_KEY = "8a25ca745ce2307fc791fcd10a83851c27734793"
 
@@ -136,7 +138,10 @@ def print_list_of_ships(list_of_ships):
 
     #Pretty print of ship list
 
-    os.system('clear')
+    if platform.system() == "Windows":
+        os.system('cls')
+    else:
+        os.system('clear')
 
     count = 0
 

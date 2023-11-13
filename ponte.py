@@ -7,6 +7,8 @@ from shapely.geometry import Point
 from shapely.geometry import shape
 import requests
 from bs4 import BeautifulSoup
+import platform
+
 
 API_KEY = "8a25ca745ce2307fc791fcd10a83851c27734793"
 
@@ -88,37 +90,42 @@ crossing_ship = 999999
 
 def get_next_crossing(docks):
 
-	url = "https://siga.apdl.pt/site-apdl/planeamento/naviosmanoprev.jsp"
+  url = "https://siga.apdl.pt/site-apdl/planeamento/naviosmanoprev.jsp"
 
-	# Send an HTTP GET request to the URL
-	response = requests.get(url)
+  # Send an HTTP GET request to the URL
+  response = requests.get(url)
 
-	# Check if the request was successful
-	if response.status_code == 200:
-	    # Parse the HTML content of the page
-	    table = BeautifulSoup(response.text, "html.parser")
+  # Check if the request was successful
+  if response.status_code == 200:
+    table = BeautifulSoup(response.text, "html.parser")
+    
+    table_data = []
+    rows = table.find_all("tr")
+    for row in rows:
+      columns = row.find_all("td")
+      row_data = [column.get_text(strip=True) for column in columns]
+      if len(row_data) > 10:
+        manoeuvre = row_data[0]
+        dock = row_data[1]
+        date = row_data[2] # need to convert to datetime
+        m_time = row_data[3] # need to convert to datetime
+        ShipName = row_data[6]
 
-	    if True:
-	        # Initialize a list to store the extracted data
-	        table_data = []
+        if dock in docks:
 
-	        # Extract the rows (tr) from the table
-	        rows = table.find_all("tr")
+          if "LARGAR" in manoeuvre:
+            manoeuvre_type = "out"
 
-	        for row in rows:
-	            # Extract the columns (td) from each row
-	            columns = row.find_all("td")
-	            row_data = [column.get_text(strip=True) for column in columns]
-	            table_data.append(row_data)
+          else:
+            manoeuvre_type = "in"
 
-	        # Print or return the extracted table data
-	        expected = table_data[2:len(table_data) - 1]
+          #print(ShipName, "is expected to", manoeuvre_type, dock, "at", m_time, date)
+          table_data.append([ShipName, manoeuvre_type, dock, m_time, date])
 
+    return table_data
 
-	    else:
-	        print("Table not found")
-	else:
-	    print("Failed to retrieve the web page. Status code:", response.status_code)
+  else:
+    return response.status_code
 
 def in_area(polygon, position):
 
@@ -132,17 +139,25 @@ def in_area(polygon, position):
 
 
 
-async def connect_ais_stream():
+async def connect_ais_stream(ships):
+
+    #print(ships)
 
     async with websockets.connect("wss://stream.aisstream.io/v0/stream") as websocket:
+        
         bridge_state = False
 
         # Real code will go here
 
         ship_crossing = True
-        crossing_ship = 275524000
+        crossing_ship = ships[0]
 
-        in_or_out = "out"
+        in_or_out = ships[1]
+
+        print(crossing_ship)
+
+        print(in_or_out)
+
 
         # End of fake code
 
@@ -181,7 +196,7 @@ async def connect_ais_stream():
         	#data = str(ShipID) + " " + ShipName + " " + str(Speed_over_Ground) + " " + str(Course_over_Ground) + " " + dock_state
         	#print(data)
 
-        	if ShipID == crossing_ship and ship_crossing:
+        	if ShipName == crossing_ship and ship_crossing:
 
         		dock_state = in_area(check_area, position)
 
@@ -189,7 +204,7 @@ async def connect_ais_stream():
 	        	#os.system('clear')
 
 	        	if not(bridge_state):
-	        		print(curr_time, "- Ship", ShipName, "is about to cross the bridge. Sog:", Speed_over_Ground, "CoG:", Course_over_Ground)
+	        		print(curr_time, "- Ship", ShipName, "is about to cross the bridge. SoG:", Speed_over_Ground, "CoG:", Course_over_Ground)
 
 	        	if not(bridge_state) and dock_state and Speed_over_Ground > 1.5 and Course_over_Ground > (crossing_heading - 10) and Course_over_Ground < (crossing_heading + 10):
 	        		print(curr_time, "- Bridge is open for the passage of", ShipName)
@@ -204,8 +219,11 @@ async def connect_ais_stream():
 	        			print(curr_time, "- Bridge has closed")
 	        			ship_crossing = False
 	        		else:
-	        			print(curr_time, "- Ship", ShipName, "is crossing the bridge")
+	        			print(curr_time, "- Ship", ShipName, "is crossing the bridge. SoG:", Speed_over_Ground, "CoG:", Course_over_Ground)
 
 
 if __name__ == "__main__":
-    asyncio.run(asyncio.run(connect_ais_stream()))
+  ships = get_next_crossing(inner_docks)
+  print(ships)
+  for boat in ships:
+    asyncio.run(asyncio.run(connect_ais_stream(boat)))
