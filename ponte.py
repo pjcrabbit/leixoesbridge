@@ -12,6 +12,7 @@ import platform
 
 API_KEY = "8a25ca745ce2307fc791fcd10a83851c27734793"
 
+# ToDo - Have a file with a list of ports and their characteristics and replace this code with port selection
 
 entry_area = {
       "type": "Feature",
